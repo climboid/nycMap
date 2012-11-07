@@ -8,10 +8,6 @@ var nycMapApp = angular.module('nycMapApp', [])
         templateUrl: 'views/main.html',
         controller: 'MainCtrl'
       })
-      .when('/map', {
-        templateUrl: 'views/map.html',
-        controller: 'MapCtrl'
-      })
       .otherwise({
         redirectTo: '/'
       });
