@@ -2,50 +2,79 @@
 
 nycMapApp.controller('MainCtrl', function($scope) {
 
+ // map reduce function to examine the array of features and find
+ // the bounded box for the set. Used to find the geographic center
+ // to autmatically zoom the entire map based on height/width
+  var featuresBounds = function(path, features) {
+    return _.reduce(features, function(memo, feature) {
+      var b = path.bounds(feature);
 
- function makeJapanAll(){
-  	var path, vis, xy;
+      if (memo[0][0] > b[0][0])
+        memo[0][0] = b[0][0]
+      if (memo[0][1] > b[0][1])
+        memo[0][1] = b[0][1]
+      if (memo[1][0] < b[1][0])
+        memo[1][0] = b[1][0]
+      if (memo[1][1] < b[1][1])
+        memo[1][1] = b[1][1]
 
-		// xy = d3.geo.mercator().scale(16000).translate([-5600,2200]);
-
-		xy = d3.geo.mercator().scale(13000).translate([3000,2000]);
-
-		path = d3.geo.path().projection(xy);
-
-		vis = d3.select("#mapNyc").append("svg:svg").attr("width", 1024).attr("height", 700);
-
-
-
-		d3.json("data/nycGeoJson2.geojson", function(json) {
-		  return vis.append("svg:g")
-			  .attr("class", "tracts")
-			  .selectAll("path")
-			  .data(json.features).enter()
-			  .append("svg:path")
-			  .attr("d", path)
-			  .attr("fill",function(d,i){ return d.properties.color || "transparent"})
-			  .attr("id",function(d,i){ return d.id})
-			  .attr("stroke", "#222")
-			  .on("click", function(d,i) {
-			  	var x = event.clientX;
-			  	var y = event.clientY;
-			  	var self = this.id;
-			  	var el = _.find(glb.japanMapData,function(num){return num.id == self});
-			  	$("#popUp").animate({
-			  		'left':x+'px',
-			  		'top':y-55+'px'
-			  	},500,function(){
-			  		$(this).css('display','block').find("h3").text(el.region);
-			  		$(this).find("#twelve").text(el.sales2012);
-			  		$(this).find("#eleven").text(el.sales2011);
-			  	});
-			  })
-
-		});
-
-
+      return memo;
+    }, path.bounds(features[0]));
   }
 
 
-  makeJapanAll();
+ function makeNY(){
+    var width = 960,
+        height = 500,
+        zoomToFit = 0.95, // zoom in 95% of the height/width
+        active,
+        projection = d3.geo.mercator(),
+        path = d3.geo.path().projection(projection);
+
+    var click = function (d) {
+      if (active === d) return reset();
+      g.selectAll(".active").classed("active", false);
+      d3.select(this).classed("active", active = d);
+
+      var b = path.bounds(d);
+      var box = [(b[1][0]+b[0][0])/2, (b[1][1]+b[0][1])/2];
+      var s = zoomToFit / Math.max((b[1][0] - b[0][0]) / width, (b[1][1] - b[0][1]) / height);
+      var t = [(width - s * (b[1][0] + b[0][0])) / 2, (height - s * (b[1][1] + b[0][1])) / 2];
+
+      g.transition().duration(750).attr("transform",
+          "translate(" + box + ")"
+          + "scale(" + s + ")"
+          + "translate(" + -box[0] + "," + -(b[1][1] + b[0][1]) / 2 + ")");
+    }
+
+    var reset = function() {
+      g.selectAll(".active").classed("active", active = false);
+      g.transition().duration(750).attr("transform", "");
+    }
+
+    var svg = d3.select("body").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    var g = svg.append("g");
+
+    d3.json("data/nycGeoJson2.geojson", function(json) {
+      projection.scale(1).translate([0, 0]);
+
+      var b = featuresBounds(path, json.features),
+        s = zoomToFit / Math.max((b[1][0] - b[0][0]) / width, (b[1][1] - b[0][1]) / height),
+        t = [(width - s * (b[1][0] + b[0][0])) / 2, (height - s * (b[1][1] + b[0][1])) / 2];
+
+      projection.scale(s).translate(t);
+
+      g.selectAll("path")
+        .data(json.features).enter()
+        .append("svg:path")
+        .attr("d", path)
+        .attr("class","feature")
+        .on("click", click);
+    });
+  }
+
+  makeNY();
 });
